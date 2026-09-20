@@ -265,6 +265,10 @@ Then run the synthesis above with
 `--codec_ckpt checkpoints/spectrostream_48khz_500k.pth --save_path checkpoints/bwe_spectrostream_multirate --tag 25k`
 (and the DAC pair for the DAC arm).
 
+The weights are released under **CC-BY-4.0**, separately from the MIT-licensed
+code; see [checkpoints/LICENSE-weights.md](checkpoints/LICENSE-weights.md), which
+also lists the corpora the models were trained on.
+
 These are **inference checkpoints**: optimiser and scheduler state are stripped
 (`scripts/export_checkpoints.py`), so they load for synthesis and evaluation but
 cannot resume training. Decoding from them is bit-identical to decoding from the

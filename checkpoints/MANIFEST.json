@@ -1,5 +1,6 @@
 {
  "release_tag": "v1.0.0",
+ "license": "CC-BY-4.0 (see checkpoints/LICENSE-weights.md)",
  "note": "Inference-only checkpoints: optimiser and scheduler state stripped by scripts/export_checkpoints.py.",
  "files": {
   "spectrostream_48khz_500k.pth": {
