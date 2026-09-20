@@ -19,6 +19,10 @@ within one gradient step.
 
 Structure and much of the plumbing are inherited from Descript's Audio Codec
 (https://github.com/descriptinc/descript-audio-codec) and audiotools; see NOTICE.
+Map of the file: dataset plumbing -> the two switches (arch(), new_transformer(),
+call_transformer()) -> band_limit / cutoff draw / encode -> _step_losses, the
+teacher-forced loss over RVQ steps -> train_loop, val_loop, predict_codes ->
+load_bwe, checkpoint -> train_bwe(), the schedule.
 """
 import os
 import sys
@@ -29,7 +33,6 @@ from pathlib import Path
 import argbind
 import torch
 from einops import rearrange
-from audiotools import AudioSignal
 from audiotools import ml
 from audiotools import STFTParams
 from audiotools.core import util

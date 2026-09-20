@@ -9,19 +9,18 @@ trained adversarially, then frozen for the bandwidth-extension experiments.
         --save_path runs/codec_spectrostream/ --resume --tag latest
 
 Structure and plumbing are inherited from Descript's Audio Codec; see NOTICE.
+Map of the file: dataset plumbing (transform, STFT-collating dataset, loaders) ->
+State and load() -> val_loop / train_loop -> checkpoint, save_samples, validate ->
+train(), the schedule. The codec is adversarial: a generator (sps/model/sps.py)
+against a multi-scale STFT discriminator (sps/model/discriminator.py).
 """
 import os
 import sys
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-import inspect
 
-from typing import List
-from typing import Union
 
-import librosa
-import numpy as np
 import argbind
 import torch
 from einops import rearrange
@@ -31,7 +30,6 @@ from audiotools.core import util
 from audiotools.data import transforms
 from audiotools.data.datasets import AudioDataset as BaseAudioDataset
 from audiotools.data.datasets import AudioLoader
-from audiotools.data.datasets import ConcatDataset
 from audiotools.ml.decorators import timer
 from audiotools.ml.decorators import Tracker
 from audiotools.ml.decorators import when
@@ -51,14 +49,11 @@ torch.backends.cudnn.benchmark = bool(int(os.getenv("CUDNN_BENCHMARK", 1)))
 # Uncomment to trade memory for speed.
 
 # Optimizers
-#AdamW = argbind.bind(torch.optim.AdamW, "generator", "discriminator")
 Adam = argbind.bind(torch.optim.Adam, "generator", "discriminator")
 Accelerator = argbind.bind(ml.Accelerator, without_prefix=True)
 
 
 #@argbind.bind("generator", "discriminator")
-#def ExponentialLR(optimizer, gamma: float = 1.0):
-#    return torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma)
 
 @argbind.bind("generator", "discriminator")
 def ConstantLR(optimizer, factor: float = 1.0):
@@ -309,6 +304,14 @@ def load(
     compile_model: bool = True,
 ):
 
+    """Build or resume the whole training state.
+
+        Generator, discriminator, their optimisers and schedulers, and the two
+        datasets. With --resume, weights come from <save_path>/<tag>/; the generator
+        is read either from generator.pth (a plain state dict) or from an
+        audiotools model folder, whichever the checkpoint holds.
+
+    """
     generator, g_extra = None, {}
     discriminator, d_extra = None, {}
 
@@ -442,6 +445,15 @@ def load(
 @timer()
 @torch.no_grad()
 def val_loop(batch, state, accel):
+    """One validation batch: reconstruct and report the losses and phase diagnostics.
+
+        The codec consumes the complex STFT with the Nyquist bin dropped, so the
+        reconstruction is reassembled by re-attaching a zero Nyquist bin before
+        istft(). mel/stft/waveform are magnitude losses and cannot tell coherent
+        phase from random phase, which is why the phase diagnostics are reported
+        alongside them.
+
+    """
     state.generator.eval()
     batch = util.prepare_batch(batch, accel.device)
 
@@ -495,6 +507,15 @@ def val_loop(batch, state, accel):
 
 @timer()
 def train_loop(state, batch, accel, lambdas, disc_loss_ema_decay=0.99, disc_skip_below_loss=0.0):
+    """One training step: discriminator first, then generator.
+
+        The generator loss is the weighted sum of the terms in `lambdas` (mel,
+        adversarial, feature matching, and the two VQ terms). The discriminator is
+        updated only when its running EMA loss stays above `disc_skip_below_loss`,
+        so a discriminator that has already won does not keep pushing the generator;
+        with the default 0.0 it is updated every step, which is what the paper used.
+
+    """
     state.generator.train()
     state.discriminator.train()
     output = {}
@@ -612,6 +633,7 @@ def _compile_clean_state_dict(module):
 
 
 def checkpoint(state, save_iters, save_path):
+    """Write the checkpoint tags for this step: latest, best, and every save_iters entry."""
     metadata = {"logs": state.tracker.history}
 
     tags = ["latest"]
@@ -645,6 +667,7 @@ def checkpoint(state, save_iters, save_path):
 
 @torch.no_grad()
 def save_samples(state, val_idx, writer):
+    """Log reconstructions of the fixed validation indices to TensorBoard."""
     state.tracker.print("Saving audio samples to TensorBoard")
     state.generator.eval()
 
@@ -706,6 +729,7 @@ def save_samples(state, val_idx, writer):
 
 
 def validate(state, val_dataloader, accel):
+    """Run the whole validation loader and return the last batch's metrics."""
     for batch in val_dataloader:
         output = val_loop(batch, state, accel)
     # Consolidate state dicts if using ZeroRedundancyOptimizer
@@ -739,8 +763,12 @@ def train(
         "vq/codebook_loss": 1.0,
     }
 ):
+    # NOTE: seeding is deliberately NOT applied here -- util.seed(seed) is left
+    # commented out, as in the runs that produced the paper's codec. Enabling it
+    # would change the initialisation and therefore the trained weights.
     #util.seed(seed)
 
+    """The training loop: data, validation, sampling and checkpointing schedule."""
     Path(save_path).mkdir(exist_ok=True, parents=True)
     writer = (
         SummaryWriter(log_dir=f"{save_path}/logs") if accel.local_rank == 0 else None

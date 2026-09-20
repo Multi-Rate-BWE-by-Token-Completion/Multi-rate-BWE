@@ -274,6 +274,14 @@ full training checkpoints.
 
 - **Baselines** (A2SB, UniverSR) are not redistributed. In the paper they are run
   from their own repositories and their outputs are put through the same splice.
+- **Equivalence with the paper's runs.** The trainers here are the scripts used for
+  the experiments, refactored only for readability (dead imports, commented-out
+  bindings and debug prints removed, docstrings added); the abstract syntax trees
+  are identical once docstrings are stripped. `train_bwe.py` merges the three
+  research trainers (SpectroStream, + rate embedding, DAC) into one switchable
+  script, and was checked to return identical losses, top-1 and top-10 on a fixed
+  batch with the same weights for all three arms. Synthesis from the released
+  checkpoints is bit-identical to the paper's outputs.
 - The code is inherited from Descript's Audio Codec and `audiotools`; see
   [NOTICE.md](NOTICE.md). SpectroStream has no public implementation and is
   reimplemented here from the paper.

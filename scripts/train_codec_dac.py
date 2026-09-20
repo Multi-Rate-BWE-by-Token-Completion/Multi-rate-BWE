@@ -11,13 +11,14 @@ The model code in dac_codec/ is Descript's Audio Codec, MIT licensed, vendored s
 that the exact code that trained the released checkpoint is in this repository;
 see NOTICE.md. The predictor then loads the result with
 DAC.load_from_folder(..., package=False).
+Map of the file: bindings and data plumbing -> State and load() -> val_loop /
+train_loop -> checkpoint, save_samples, validate -> train(), the schedule.
 """
 import os
 import sys
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-import inspect
 
 import argbind
 import torch
@@ -148,6 +149,7 @@ def load(
     tag: str = "latest",
     load_weights: bool = False,
 ):
+    """Build or resume the DAC generator, its discriminator, optimisers and data."""
     generator, g_extra = None, {}
     discriminator, d_extra = None, {}
 
@@ -222,6 +224,7 @@ def load(
 @timer()
 @torch.no_grad()
 def val_loop(batch, state, accel):
+    """One validation batch: reconstruct the waveform and report mel, STFT and waveform losses."""
     state.generator.eval()
     batch = util.prepare_batch(batch, accel.device)
     signal = state.val_data.transform(
@@ -241,6 +244,13 @@ def val_loop(batch, state, accel):
 
 @timer()
 def train_loop(state, batch, accel, lambdas):
+    """One training step: discriminator first, then generator.
+
+        Standard DAC schedule. The generator loss is the weighted sum of the terms
+        in `lambdas` (mel, adversarial, feature matching and the two VQ terms), with
+        the weights given in conf/codec/dac_48khz.yml.
+
+    """
     state.generator.train()
     state.discriminator.train()
     output = {}
@@ -250,7 +260,6 @@ def train_loop(state, batch, accel, lambdas):
         signal = state.train_data.transform(
             batch["signal"].clone(), **batch["transform_args"]
         )
-        print("signal", signal.audio_data.size())
 
     with accel.autocast():
         out = state.generator(signal.audio_data, signal.sample_rate)
@@ -271,7 +280,6 @@ def train_loop(state, batch, accel, lambdas):
     state.scheduler_d.step()
 
     with accel.autocast():
-        print("recons", recons.audio_data.size())
         output["stft/loss"] = state.stft_loss(recons, signal)
         output["mel/loss"] = state.mel_loss(recons, signal)
         output["waveform/loss"] = state.waveform_loss(recons, signal)
@@ -300,6 +308,7 @@ def train_loop(state, batch, accel, lambdas):
 
 
 def checkpoint(state, save_iters, save_path):
+    """Write the checkpoint tags for this step: latest, best, and every save_iters entry."""
     metadata = {"logs": state.tracker.history}
 
     tags = ["latest"]
@@ -333,6 +342,7 @@ def checkpoint(state, save_iters, save_path):
 
 @torch.no_grad()
 def save_samples(state, val_idx, writer):
+    """Log reconstructions of the fixed validation indices to TensorBoard."""
     state.tracker.print("Saving audio samples to TensorBoard")
     state.generator.eval()
 
@@ -358,6 +368,7 @@ def save_samples(state, val_idx, writer):
 
 
 def validate(state, val_dataloader, accel):
+    """Run the whole validation loader and return the last batch's metrics."""
     for batch in val_dataloader:
         output = val_loop(batch, state, accel)
     # Consolidate state dicts if using ZeroRedundancyOptimizer
@@ -389,6 +400,7 @@ def train(
         "vq/codebook_loss": 1.0,
     },
 ):
+    """The training loop: data, validation, sampling and checkpointing schedule."""
     util.seed(seed)
     Path(save_path).mkdir(exist_ok=True, parents=True)
     writer = (
