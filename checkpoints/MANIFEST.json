@@ -1,6 +1,8 @@
 {
  "release_tag": "v1.0.0",
  "license": "CC-BY-4.0 (see checkpoints/LICENSE-weights.md)",
+ "zenodo_doi": "10.5281/zenodo.22859141",
+ "zenodo_version_doi": "10.5281/zenodo.22859142",
  "note": "Inference-only checkpoints: optimiser and scheduler state stripped by scripts/export_checkpoints.py.",
  "files": {
   "spectrostream_48khz_500k.pth": {

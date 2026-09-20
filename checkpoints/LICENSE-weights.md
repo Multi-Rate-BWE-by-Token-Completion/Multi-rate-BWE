@@ -9,6 +9,9 @@ You may use, share and adapt them, including commercially, provided you give
 appropriate credit — cite the paper (see CITATION.cff) and link back to this
 repository.
 
+Archived on Zenodo: <https://doi.org/10.5281/zenodo.22859141> (concept DOI, always the latest;
+this release is 10.5281/zenodo.22859142).
+
 The **code** in this repository is MIT licensed instead; see LICENSE.
 
 ## What the models were trained on

@@ -239,7 +239,8 @@ is never used for evaluation.
 
 ## Pretrained models
 
-The models used for the paper are attached to the GitHub release.
+The models used for the paper are attached to the GitHub release, and archived
+on Zenodo: [![Models DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22859141.svg)](https://doi.org/10.5281/zenodo.22859141)
 
 | Asset | What it is | Size |
 |---|---|---|
@@ -267,7 +268,9 @@ Then run the synthesis above with
 
 The weights are released under **CC-BY-4.0**, separately from the MIT-licensed
 code; see [checkpoints/LICENSE-weights.md](checkpoints/LICENSE-weights.md), which
-also lists the corpora the models were trained on.
+also lists the corpora the models were trained on. They are archived on Zenodo at
+<https://doi.org/10.5281/zenodo.22859141> (that DOI always resolves to the latest version), so
+they remain available independently of GitHub.
 
 These are **inference checkpoints**: optimiser and scheduler state are stripped
 (`scripts/export_checkpoints.py`), so they load for synthesis and evaluation but
