@@ -2,7 +2,8 @@
 torch==2.1.2
 torchaudio==2.1.2
 descript-audiotools==0.7.2
-descript-audio-codec==1.0.0     # only needed for the DAC arm
+# The DAC codec code is vendored in dac_codec/ (see NOTICE.md); the pip package
+# descript-audio-codec is NOT required.
 argbind==0.3.7
 einops==0.7.0
 torcheval==0.0.7
@@ -10,5 +11,6 @@ numpy==1.26.3
 scipy==1.11.4
 librosa==0.10.1
 soundfile==0.12.1
+tqdm
 tensorboard==2.20.0
 visqol==3.3.3                   # objective metric; see README for installation

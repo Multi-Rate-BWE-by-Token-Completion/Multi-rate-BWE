@@ -1,0 +1,59 @@
+{
+ "release_tag": "v1.0.0",
+ "note": "Inference-only checkpoints: optimiser and scheduler state stripped by scripts/export_checkpoints.py.",
+ "files": {
+  "spectrostream_48khz_500k.pth": {
+   "description": "SpectroStream codec, 48 kHz, 64 RVQ levels, 500k steps (the paper uses the first 48 levels = 12 kbit/s)",
+   "install_to": "checkpoints/spectrostream_48khz_500k.pth",
+   "md5": "d6ccf4a4a9b5e94885e12bd9ba9da72f",
+   "bytes": 131890565,
+   "step": 499999,
+   "kwargs": null
+  },
+  "bwe_spectrostream_multirate_25k.pth": {
+   "description": "Multi-rate BWE predictor on SpectroStream, 25k steps: 8/16/24/32 kHz, no rate conditioning (Table 1 'Ours (SpectroStream)')",
+   "install_to": "checkpoints/bwe_spectrostream_multirate/25k/transformer.pth",
+   "md5": "20226d5eb6a05f5d0dde8671e97ac4be",
+   "bytes": 574208464,
+   "step": 25000,
+   "kwargs": null
+  },
+  "bwe_dac_multirate_25k.pth": {
+   "description": "Multi-rate BWE predictor on DAC, 25k steps (Table 1 'Ours (DAC)')",
+   "install_to": "checkpoints/bwe_dac_multirate/25k/transformer.pth",
+   "md5": "fd2b28f6888e1165b9307f7288ad68fd",
+   "bytes": 385280886,
+   "step": 25000,
+   "kwargs": null
+  },
+  "dac_48khz_12cb": {
+   "description": "DAC codec retrained by us at 48 kHz with 12 codebooks, 44k steps (weights.pth + metadata.pth)",
+   "install_to": "checkpoints/dac_48khz_12cb/dac/weights.pth",
+   "md5": "20afaab45874566caf3d5c34c565f431",
+   "bytes": 307044782,
+   "step": null,
+   "kwargs": {
+    "encoder_dim": 64,
+    "encoder_rates": [
+     2,
+     4,
+     8,
+     8
+    ],
+    "latent_dim": 1024,
+    "decoder_dim": 1536,
+    "decoder_rates": [
+     8,
+     8,
+     4,
+     2
+    ],
+    "n_codebooks": 12,
+    "codebook_size": 1024,
+    "codebook_dim": 8,
+    "quantizer_dropout": false,
+    "sample_rate": 48000
+   }
+  }
+ }
+}

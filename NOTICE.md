@@ -28,9 +28,15 @@ Specifically:
 No public implementation exists; the architecture follows the paper, and any
 error in it is ours.
 
-**The DAC codec used in the paper** is upstream DAC (`descript-audio-codec`
-1.0.0) with the architecture in `conf/codec/dac_48khz.yml` (48 kHz, 12
-codebooks). It is loaded here through the upstream package.
+`dac_codec/` is **DAC's own code**, MIT licensed, vendored unchanged from the copy
+used to train the DAC codec of the paper (`scripts/train_codec_dac.py` is its
+training script). It is included so that the exact code behind the released DAC
+checkpoint, and behind the mel metric reported in the paper, is in this
+repository rather than assumed from a pip package.
+
+**The DAC codec used in the paper was retrained by us** at 48 kHz with 12
+codebooks (`conf/codec/dac_48khz.yml`); it is not a Descript-released
+checkpoint.
 
 The baselines compared in the paper (A2SB, UniverSR) are not redistributed; see
 their own repositories.

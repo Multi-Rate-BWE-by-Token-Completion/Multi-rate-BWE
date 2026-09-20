@@ -1,22 +1,98 @@
-# The DAC codec used in the paper: upstream Descript Audio Codec, retrained at
-# 48 kHz with 12 codebooks (12 x 10 bits x 93.75 Hz = 11.25 kbit/s), against
-# SpectroStream's 48 x 10 x 25 Hz = 12 kbit/s.
+# The DAC codec of the paper: Descript's Audio Codec RETRAINED by us at 48 kHz
+# with 12 codebooks (12 x 10 bits x 93.75 Hz = 11.25 kbit/s), against
+# SpectroStream's 48 x 10 x 25 Hz = 12 kbit/s. It is not a Descript release.
 #
-# These are the constructor arguments of the trained codec (they are also stored
-# inside the checkpoint package, which is why conf/bwe/dac_multirate.yml does not
-# restate them: DAC.load_from_folder reads them back).
+#   python scripts/train_codec_dac.py --args.load conf/codec/dac_48khz.yml \
+#       --save_path runs/codec_dac_48khz/
 #
-# Train it with the upstream DAC trainer
-# (https://github.com/descriptinc/descript-audio-codec, scripts/train.py) on the
-# same data as the SpectroStream codec, then point
-# conf/bwe/dac_multirate.yml:codec_ckpt at the resulting run folder.
+# 44k steps, batch 16, one GPU. The bandwidth-extension predictor then reads the
+# resulting run folder (conf/bwe/dac_multirate.yml: codec_ckpt).
 DAC.sample_rate: 48000
 DAC.encoder_dim: 64
 DAC.encoder_rates: [2, 4, 8, 8]
-DAC.latent_dim: 1024
 DAC.decoder_dim: 1536
 DAC.decoder_rates: [8, 8, 4, 2]
 DAC.n_codebooks: 12
 DAC.codebook_size: 1024
 DAC.codebook_dim: 8
-DAC.quantizer_dropout: false
+DAC.quantizer_dropout: 1.0
+
+Discriminator.sample_rate: 48000
+Discriminator.rates: []
+Discriminator.periods: [2, 3, 5, 7, 11]
+Discriminator.fft_sizes: [2048, 1024, 512]
+Discriminator.bands:
+  - [0.0, 0.1]
+  - [0.1, 0.25]
+  - [0.25, 0.5]
+  - [0.5, 0.75]
+  - [0.75, 1.0]
+
+AdamW.betas: [0.8, 0.99]
+AdamW.lr: 0.0001
+ExponentialLR.gamma: 0.999996
+amp: false
+device: cuda
+seed: 0
+num_iters: 44000
+save_iters: [10000, 50000, 100000, 200000]
+valid_freq: 1000
+sample_freq: 10000
+batch_size: 16
+val_batch_size: 8
+num_workers: 8
+val_idx: [0, 1, 2, 3, 4, 5, 6, 7]
+resume: False
+lambdas:
+  mel/loss: 15.0
+  adv/feat_loss: 2.0
+  adv/gen_loss: 1.0
+  vq/commitment_loss: 0.25
+  vq/codebook_loss: 1.0
+
+# DAC's training objective. NOTE these are the TRAINING mel settings (7 scales,
+# magnitude term off); the mel REPORTED in the paper is the DAC default
+# (2 scales, {150, 80} bins, log + linear), which scripts/evaluate.py builds
+# from dac_codec.nn.loss.MelSpectrogramLoss() with its defaults.
+MultiScaleSTFTLoss.window_lengths: [2048, 512]
+MelSpectrogramLoss.n_mels: [5, 10, 20, 40, 80, 160, 320]
+MelSpectrogramLoss.window_lengths: [32, 64, 128, 256, 512, 1024, 2048]
+MelSpectrogramLoss.mel_fmin: [0, 0, 0, 0, 0, 0, 0]
+MelSpectrogramLoss.mel_fmax: [null, null, null, null, null, null, null]
+MelSpectrogramLoss.pow: 1.0
+MelSpectrogramLoss.clamp_eps: 1.0e-5
+MelSpectrogramLoss.mag_weight: 0.0
+
+VolumeNorm.db: [const, -16]
+build_transform.preprocess:
+  - Identity
+build_transform.augment_prob: 0.0
+build_transform.augment:
+  - Identity
+build_transform.postprocess:
+  - VolumeNorm
+  - RescaleAudio
+  - ShiftPhase
+
+train/AudioDataset.duration: 0.38
+train/AudioDataset.n_examples: 10000000
+val/AudioDataset.duration: 5.0
+val/build_transform.augment_prob: 1.0
+val/AudioDataset.n_examples: 250
+test/AudioDataset.duration: 10.0
+test/build_transform.augment_prob: 1.0
+test/AudioDataset.n_examples: 1000
+AudioLoader.shuffle: true
+AudioDataset.without_replacement: true
+
+# Same corpora as the SpectroStream codec: Jamendo + the MUSDB18 training split.
+train/build_dataset.folders:
+  music_hq:
+    - /path/to/musdb18/train/Mixtures
+    - /path/to/jamendo/audio
+val/build_dataset.folders:
+  music_hq:
+    - /path/to/musdb18/test/Mixtures
+test/build_dataset.folders:
+  music_hq:
+    - /path/to/musdb18/test/Mixtures

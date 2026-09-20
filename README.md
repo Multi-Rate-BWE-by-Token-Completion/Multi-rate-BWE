@@ -29,23 +29,30 @@ sps/                     SpectroStream: codec, discriminator and the predictor t
   model/transformer.py     predictor, autoregressive over RVQ depth
   model/transformer_rate.py  the same plus a learned cutoff embedding (ablation)
   nn/                      layers, quantizers, losses
+dac_codec/               DAC (Descript's Audio Codec), vendored: the exact code that
+                         trained our 48 kHz DAC, and the source of the reported mel
 scripts/
   train_codec.py         train the SpectroStream codec
+  train_codec_dac.py     retrain the DAC codec at 48 kHz (our codec, not a release)
   train_bwe.py           train a bandwidth-extension predictor (all four arms)
   get_samples_bwe.py     synthesis: band-limited codes -> extended audio
   evaluate.py            objective metrics (ViSQOL, mel, STFT, waveform, SI-SDR)
   make_testsets.py       build the evaluation excerpts and band-limited partners
   make_filelists.py      build training file lists, with the bandwidth filter
+  download_checkpoints.py  fetch the released weights
+  export_checkpoints.py    how those weights were produced
 conf/
-  codec/spectrostream_48khz.yml   the codec of the paper
-  codec/dac_48khz.yml             the DAC codec's architecture
+  codec/spectrostream_48khz.yml   the SpectroStream codec of the paper
+  codec/dac_48khz.yml             the DAC codec we retrained
   bwe/spectrostream_multirate.yml the proposed model
   bwe/spectrostream_per_rate.yml  one predictor per rate (Table 3)
   bwe/spectrostream_rate_emb.yml  + explicit cutoff embedding (Table 3)
   bwe/dac_multirate.yml           the same predictor on DAC
+checkpoints/MANIFEST.json  what the release carries, with checksums
 ```
 
-No data, checkpoints or results are included.
+Trained models are distributed through the GitHub release (see below). No data or
+results are included.
 
 ## Install
 
@@ -56,8 +63,9 @@ pip install -r requirements.txt
 
 `visqol` is only needed for `scripts/evaluate.py`; it ships as a wheel for some
 platforms and otherwise has to be built from
-<https://github.com/google/visqol>. Everything else installs from PyPI.
-`descript-audio-codec` is only needed for the DAC arm.
+<https://github.com/google/visqol>. Everything else installs from PyPI. The DAC
+code is vendored in `dac_codec/`, so the `descript-audio-codec` package is not
+required.
 
 Configuration uses [argbind](https://github.com/pseeth/argbind): every value in a
 YAML file can be overridden on the command line (`--batch_size 8`), and
@@ -109,8 +117,15 @@ torchrun --nproc_per_node=4 scripts/train_codec.py \
 500k steps, batch 64 over 4 GPUs. The codec is then frozen; the predictors read
 `runs/codec_spectrostream/<tag>/generator.pth`.
 
-For the DAC arm, train upstream DAC with the architecture in
-`conf/codec/dac_48khz.yml` and point `codec_ckpt` at its run folder.
+The DAC codec of the paper is **retrained by us**, not a Descript release: 48 kHz,
+12 codebooks (11.25 kbit/s), 44k steps, on the same data.
+
+```bash
+python scripts/train_codec_dac.py --args.load conf/codec/dac_48khz.yml \
+    --save_path runs/codec_dac_48khz/
+```
+
+`conf/bwe/dac_multirate.yml:codec_ckpt` then points at that run folder.
 
 ### 2. The predictor
 
@@ -172,14 +187,51 @@ full-band codes, i.e. perfect prediction at the same bit rate) and `lowband` (th
 band-limited input, the anchor). `metrics.csv` carries one row per file; the
 analysis reads the `sr48000` rows.
 
-Metrics are ViSQOL v3 in audio mode, a multi-resolution mel distance (windows
-{2048, 512}, {150, 80} mel bins, log10 of the squared magnitude plus a linear
-term), a multi-resolution STFT distance, waveform L1, and SI-SDR, which is stored
-as a loss (negate it for dB).
+Metrics are ViSQOL v3 in audio mode, the mel distance, a multi-resolution STFT
+distance, waveform L1, and SI-SDR, which is stored as a loss (negate it for dB).
+
+The reported **mel is DAC's**: `dac_codec/nn/loss.py`, built with its defaults —
+two resolutions, window lengths {2048, 512}, {150, 80} mel bins, log10 of the
+squared magnitude plus a linear term. It is the same metric DAC and our earlier
+work report, so the numbers are comparable with them. It is *not* the
+SpectroStream training mel in `sps/nn/loss.py`, which is a different objective and
+is never used for evaluation.
+
+## Pretrained models
+
+The models used for the paper are attached to the GitHub release.
+
+| Asset | What it is | Size |
+|---|---|---|
+| `spectrostream_48khz_500k.pth` | SpectroStream codec, 64 RVQ levels, 500k steps (the paper uses the first 48 = 12 kbit/s) | 132 MB |
+| `dac_48khz_12cb` | our DAC codec, 48 kHz, 12 codebooks, 44k steps | 307 MB |
+| `bwe_spectrostream_multirate_25k.pth` | the multi-rate predictor on SpectroStream, 25k steps (Table 1, "Ours (SpectroStream)") | 574 MB |
+| `bwe_dac_multirate_25k.pth` | the multi-rate predictor on DAC, 25k steps (Table 1, "Ours (DAC)") | 385 MB |
+
+```bash
+python scripts/download_checkpoints.py      # verifies MD5 against checkpoints/MANIFEST.json
+```
+
+This lays them out as the configs expect:
+
+```
+checkpoints/spectrostream_48khz_500k.pth
+checkpoints/dac_48khz_12cb/dac/{weights,metadata}.pth
+checkpoints/bwe_spectrostream_multirate/25k/transformer.pth
+checkpoints/bwe_dac_multirate/25k/transformer.pth
+```
+
+Then run the synthesis above with
+`--codec_ckpt checkpoints/spectrostream_48khz_500k.pth --save_path checkpoints/bwe_spectrostream_multirate --tag 25k`
+(and the DAC pair for the DAC arm).
+
+These are **inference checkpoints**: optimiser and scheduler state are stripped
+(`scripts/export_checkpoints.py`), so they load for synthesis and evaluation but
+cannot resume training. Decoding from them is bit-identical to decoding from the
+full training checkpoints.
 
 ## Notes
 
-- **Checkpoints** are not in this repository; contact the authors.
 - **Baselines** (A2SB, UniverSR) are not redistributed. In the paper they are run
   from their own repositories and their outputs are put through the same splice.
 - The code is inherited from Descript's Audio Codec and `audiotools`; see

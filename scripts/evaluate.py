@@ -4,9 +4,12 @@ Writes metrics.csv inside the output folder, one row per file, with the five
 metrics reported in the paper:
 
     visqol-audio  ViSQOL v3, audio mode (the main metric)
-    mel           multi-resolution mel distance: two resolutions, window lengths
-                  {2048, 512} and {150, 80} mel bins, log10 of the squared
-                  magnitude plus a linear term, L1, summed over resolutions
+    mel           DAC's multi-resolution mel distance, with DAC's default settings:
+                  two resolutions, window lengths {2048, 512} and {150, 80} mel
+                  bins, log10 of the squared magnitude plus a linear term, L1,
+                  summed over resolutions. Taken from dac_codec/nn/loss.py, so it
+                  is the same metric DAC and our earlier work report. It is NOT
+                  the SpectroStream training mel in sps/nn/loss.py.
     stft          multi-resolution STFT distance, windows {2048, 512}
     waveform      waveform L1
     sisdr         scale-invariant SDR, stored as a LOSS (negate for dB)
@@ -36,13 +39,14 @@ from audiotools.core import util
 from audiotools.ml.decorators import Tracker
 
 sys.path.append(os.getcwd())
-from sps.nn.loss import L1Loss, MelSpectrogramLoss_DAC, MultiScaleSTFTLoss, SISDRLoss  # noqa: E402
+from dac_codec.nn.loss import MelSpectrogramLoss  # noqa: E402  (DAC's mel: the reported metric)
+from sps.nn.loss import L1Loss, MultiScaleSTFTLoss, SISDRLoss  # noqa: E402
 
 
 @dataclass
 class State:
     stft_loss: MultiScaleSTFTLoss
-    mel_loss: MelSpectrogramLoss_DAC
+    mel_loss: MelSpectrogramLoss
     waveform_loss: L1Loss
     sisdr_loss: SISDRLoss
 
@@ -75,7 +79,7 @@ def evaluate(
     state = State(
         waveform_loss=L1Loss(),
         stft_loss=MultiScaleSTFTLoss(),
-        mel_loss=MelSpectrogramLoss_DAC(),
+        mel_loss=MelSpectrogramLoss(),
         sisdr_loss=SISDRLoss(),
     )
 

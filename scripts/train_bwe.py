@@ -404,9 +404,13 @@ def load_codec(codec, codec_ckpt, args, accel, tracker):
     hyperparameters, so nothing has to be restated in the config.
     """
     if codec == "dac":
-        from dac.model import DAC          # descript-audio-codec
+        from dac_codec.model import DAC    # the vendored DAC code (see NOTICE.md)
+        # package=False rebuilds the model from dac/weights.pth + dac/metadata.pth
+        # using the code in this repository, so the distributed checkpoint does
+        # not have to carry a torch.package copy of it. Verified to give
+        # bit-identical parameters and codes to the packaged checkpoint.
         generator, _ = DAC.load_from_folder(folder=codec_ckpt, map_location="cpu",
-                                            package=True)
+                                            package=False)
         tracker.print(f"Loaded frozen DAC from {codec_ckpt}: "
                       f"{generator.n_codebooks} codebooks, hop {generator.hop_length}")
     else:

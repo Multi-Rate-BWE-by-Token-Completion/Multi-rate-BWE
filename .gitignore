@@ -14,3 +14,8 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# exported checkpoints and downloaded weights
+dist/
+checkpoints/**/*.pth
+!checkpoints/MANIFEST.json
