@@ -48,39 +48,22 @@ class TransformerModel(BaseModel):
     step embedding tells it which codebook it is currently predicting, and a
     dedicated output head is used per step.
 
-    Two aspects of the pooling are configurable. BOTH DEFAULT TO THE LEGACY
-    BEHAVIOUR so that checkpoints trained before they existed still load.
-
+    Parameters
+    ----------
+    n_input_embs
+        Number of input codebooks the model can be given: n_codebooks of the
+        band-limited signal plus n_pred_tokens - 1 fed back predictions.
     input_pool
-        "sum" (legacy) embeds each codebook into ninp dims and adds them. With
-        n_input_embs=47 that superposes 47 symbols in one 1024-d vector, leaving
-        each codebook roughly 1024/47 = 22 effective dimensions to separate 1024
-        entries.
-
-        "concat" embeds each codebook into emb_dim dims, concatenates, and
-        projects to ninp. Summing is the special case where that projection is a
-        tiled identity, so this is strictly more expressive -- and at emb_dim=64
-        it is also SMALLER: 47*1024*64 + (47*64)*1024 = 6.2M against the 49M the
-        summed tables use.
-
+        "concat" (used by the paper) embeds each codebook into emb_dim dims,
+        concatenates and projects to ninp. "sum" adds ninp-dim embeddings.
     input_norm
-        False (legacy) scales the pooled embedding by sqrt(ninp) before adding
-        the positional encoding, which is the "Attention is All You Need" recipe.
-        That recipe assumes ONE embedding initialised at std ~ d^-0.5. Here 47
-        tables initialised at uniform(-0.1, 0.1) are summed first, so the pooled
-        content arrives at rms 0.0577*sqrt(47)*32 = 12.7 against the positional
-        encoding's 0.707 -- a ratio of 18:1 where the recipe intends 1.4:1. `pe`
-        is registered with requires_grad=False, so the model cannot amplify it;
-        it can only shrink all 47 tables together, against the content pathway.
-        Whatever position information layer 1 fails to resolve is unrecoverable,
-        which is a candidate explanation for how little time context has bought
-        (5.36% top-1 at 63 frames against 6.35% at 251).
+        True (used by the paper) applies a LayerNorm to the pooled embedding;
+        False scales it by sqrt(ninp) instead.
+    norm_first
+        False is post-LN, True pre-LN with a final LayerNorm.
 
-        True applies a LayerNorm after pooling and drops the scale to 1.0. That
-        also removes a second-order wart: the sum runs over 24+k embeddings at
-        prediction step k, so the legacy input norm drifts by sqrt(47/24) = 1.40
-        across the RVQ depth, and PyTorch's TransformerEncoderLayer is post-norm
-        so nothing rescales it before the first attention.
+    The defaults are the legacy ones ("sum", no norm), so older checkpoints
+    still load; the configs in conf/bwe/ set the values the paper used.
     """
 
     def __init__(
@@ -102,22 +85,7 @@ class TransformerModel(BaseModel):
         super().__init__()
         if input_pool not in ("sum", "concat"):
             raise ValueError(f"input_pool must be 'sum' or 'concat', got {input_pool!r}")
-        # norm_first=False (legacy) is POST-LN, which nn.TransformerEncoderLayer
-        # defaults to and which nothing here previously overrode. Post-LN puts the
-        # residual stream outside the LayerNorm, so activation magnitude compounds
-        # with depth and the gradient through the early layers is scaled by the
-        # product of the later layers' Jacobians. At 6 layers it trains; at 12 it
-        # is the standard divergence case, and it is why the original Transformer
-        # needed a warmup schedule. A deeper model in HP-codecX collapsed, which
-        # is consistent with this being the cause rather than anything about the
-        # data.
-        #
-        # norm_first=True is PRE-LN: each sublayer normalises its input and the
-        # residual stream stays unnormalised end to end, so gradients reach layer
-        # 0 without that compounding factor and depth is stable without warmup.
-        # It needs a FINAL LayerNorm, because the last block's output never passes
-        # through one otherwise -- nn.TransformerEncoder leaves norm=None if not
-        # given, which for pre-LN would emit an unnormalised residual stream.
+        # pre-LN (norm_first=True) needs the final LayerNorm below; post-LN does not.
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=ninp, nhead=nhead, dim_feedforward=nhid, dropout=dropout,
             norm_first=norm_first

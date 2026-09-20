@@ -153,10 +153,9 @@ def main():
         tracker = Tracker(writer=None, log_file="/dev/null", rank=0)
         codec, rate_emb = tb.arch()
         gain_mode = known.gain or ("per_condition" if codec == "dac" else "shared")
-        # resume=True EXPLICITLY: load_bwe defaults to False, and without it the
-        # transformer is built from scratch and every prediction is random.
-        # "Loaded frozen codec" is NOT evidence the transformer loaded; look for
-        # "Resuming transformer from".
+        # resume=True is required: without it the transformer is built from
+        # scratch and every prediction is random. Check the log says
+        # "Resuming transformer from" -- "Loaded frozen codec" is a different load.
         state = tb.load_bwe(args, accel, tracker, args.get("save_path"),
                             resume=True, tag=known.tag)
         gen = accel.unwrap(state.generator)
@@ -211,10 +210,8 @@ def main():
                 nf = low_spec.shape[-1]
                 n = ref.audio_data.shape[-1]
 
-                # Codes come from the BAND-LIMITED signal: that is what a decoder
-                # actually holds. Encoding the full-band reference would leak the
-                # high band into the conditioning. The full-band codes are used
-                # only for the `ceiling` condition.
+                # Input codes come from the BAND-LIMITED signal, which is what a
+                # decoder holds; the full-band codes are used only for `ceiling`.
                 codes_down = tb.encode(gen, low, codec, ncb)
                 codes_true = tb.encode(gen, ref, codec, npt)
                 codes_pred = predict(tr, codes_down, npt, known.top_p, ridx)
@@ -242,10 +239,8 @@ def main():
                     audio[f"predicted_k{d}"] = compose(codes_pred, depth=d)
                 audio = {k: v.cpu() for k, v in audio.items()}
 
-                # Clip-avoidance gain. "shared" takes ONE scalar per item across
-                # all conditions, so the conditions stay on a common scale within
-                # a run; "per_condition" attenuates a condition only if it clips
-                # on its own.
+                # Clip-avoidance gain: one scalar per item across all conditions
+                # ("shared"), or per condition only if it clips ("per_condition").
                 peaks = torch.stack([a.audio_data.abs().amax(dim=(1, 2)) for a in audio.values()])
                 shared_gain = 1.0 / peaks.amax(dim=0).clamp(min=1.0)
                 for name, a in audio.items():

@@ -62,14 +62,9 @@ def ConstantLR(optimizer, factor: float = 1.0):
 
 # Models
 SpS = argbind.bind(sps.model.SpS)
-# SpectroStream's own discriminator (paper Fig. 2): multi-scale, 2D-conv, and
-# critically it takes (real, imag, modulus) of the STFT as input. That complex
-# input is what makes the feature-matching loss (Eq. 5, weighted lambda_feat=100)
-# an implicit phase-alignment objective -- the paper has no explicit phase loss,
-# so this is the only thing supervising phase. Discriminator_DAC was tried here
-# instead and is kept in the codebase, but it is paired with DAC's *waveform*
-# decoder where phase coherence is structural; bolted onto a complex-STFT decoder
-# it does not play the same role, which we measured and did not pursue.
+# SpectroStream's discriminator (paper Fig. 2): multi-scale, 2-D convolutional,
+# taking (real, imag, modulus) of the STFT. Feature matching against it is what
+# supervises phase; there is no explicit phase loss.
 Discriminator = argbind.bind(sps.model.Discriminator)
 
 # Data
@@ -94,13 +89,9 @@ def compute_target_stft(signal):
 
 
 class STFTAudioDataset(BaseAudioDataset):
-    # Note: STFT is intentionally *not* computed in __getitem__. AudioSignal.batch()
-    # (used by collate below) rebuilds a fresh AudioSignal from each item's raw
-    # audio_data only and does not carry over stft_data, so any STFT computed
-    # per-item here would just be discarded and recomputed from scratch in
-    # collate anyway -- doing it here as well doubled the FFT work per example
-    # for nothing. collate() is the only place stft_data actually needs to be
-    # computed, on the already-batched signal, using the same TARGET_STFT_PARAMS.
+    # The STFT is computed here, on the batched signal, and not in __getitem__:
+    # AudioSignal.batch() rebuilds each item from raw audio_data and drops any
+    # per-item stft_data, so computing it earlier only doubles the FFT work.
     @staticmethod
     def collate(list_of_dicts, n_splits=None):
         batch = BaseAudioDataset.collate(list_of_dicts, n_splits=n_splits)
@@ -129,22 +120,11 @@ def get_infinite_loader(dataloader):
 
 
 # ---------------------------------------------------------------------------
-# Phase-coherence diagnostics.
-#
-# The decoder emits a complex STFT (real, imag), but every reconstruction loss
-# we train on -- mel and multi-scale STFT -- is magnitude-only, and the paper
-# has no explicit phase term either (its phase supervision is implicit, via
-# feature-matching against a discriminator that sees real+imag; see the
-# Discriminator binding above). That means nothing in the *logged* losses
-# distinguishes "correct magnitude, coherent phase" from "correct magnitude,
-# random phase" -- and the latter sounds broken while mel/loss looks healthy.
-#
-# Measured on this project's history, phase does not begin to emerge until
-# ~30k steps and only breaks through around 60-65k, so these are deliberately
-# tracked from step 0: the transition is otherwise invisible until it has
-# already failed to happen. Reference values on 48kHz music:
-#     phase_error ~= 1.5708 (pi/2)  -> indistinguishable from random phase
-#     phase_error ~= 0.64, SI-SDR ~= +10 dB -> pretrained DAC
+# Phase-coherence diagnostics. The training losses (mel, multi-scale STFT) are
+# magnitude-only, so none of them separates coherent phase from random phase.
+# Reference values on 48 kHz music:
+#     phase_error ~= 1.5708 (pi/2)          indistinguishable from random phase
+#     phase_error ~= 0.64, SI-SDR ~= +10 dB  pretrained DAC
 # ---------------------------------------------------------------------------
 def phase_error(estimate: AudioSignal, reference: AudioSignal,
                 n_fft: int = 960, hop_length: int = 480):
@@ -230,23 +210,14 @@ def build_dataset(
     folders: dict = None,
     weights: list = None,
 ):
-    # `folders` entries may be directories OR .csv file lists with a "path"
-    # column (audiotools' read_sources handles both), which is how the
-    # bandwidth-filtered subsets in filelists/ are wired in
+    # `folders` entries may be directories or .csv file lists with a "path" column
     # (see scripts/make_filelists.py).
     #
-    # `weights` gives the probability of drawing from each source, in the same
-    # order as folders['music_hq']. Without it, sampling is proportional to FILE
-    # COUNT, which is not what you usually want: a 3 s clip and a 224 s track get
-    # identical draw probability, so a large collection of short files silently
-    # dominates. Measured on this corpus, unweighted sampling gave Jamendo 99.8%
-    # of draws and MUSDB 0.18%.
-    #
-    # IMPORTANT: weights are only consulted when AudioDataset.without_replacement
-    # is False. When it is True, AudioDataset passes a global_idx and AudioLoader
-    # indexes a flat list of every file instead, bypassing the weights entirely --
-    # silently, with no error. Set `AudioDataset.without_replacement: false`
-    # alongside any weights.
+    # `weights` is the draw probability per source, in the order of
+    # folders['music_hq']. Without it, sampling is proportional to FILE COUNT, so a
+    # collection of short files dominates. IMPORTANT: weights are only used when
+    # AudioDataset.without_replacement is False -- otherwise they are ignored
+    # silently, so set it alongside any weights.
     if weights is not None:
         n_src = len(folders["music_hq"])
         if len(weights) != n_src:
@@ -285,10 +256,7 @@ class State:
 
     tracker: Tracker
 
-    # Running EMA of adv/disc_loss, used by train_loop to decide whether D gets a
-    # gradient update this step. Starts at None (first observed value seeds it);
-    # not restored from checkpoints on resume, so it re-adapts over the first
-    # several dozen steps after any resume -- an acceptable, short transient.
+    # Running EMA of adv/disc_loss, read by train_loop. Not restored on resume.
     disc_loss_ema: float = None
 
 
@@ -358,26 +326,16 @@ def load(
     discriminator = accel.prepare_model(discriminator)
 
     if compile_model:
-        # SpS.forward is pure-tensor (no AudioSignal objects touched inside
-        # encode/decode), so the whole generator can be compiled as one unit.
+        # SpS.forward is pure-tensor, so the generator compiles as one unit.
         generator = torch.compile(generator)
 
-        # Discriminator.forward is NOT pure-tensor -- it sets signal.stft_params
-        # and calls signal.stft() directly on AudioSignal objects, which dynamo
-        # can't trace. Only the inner BaseDiscriminator submodules (pure conv/
-        # norm/activation tensor ops) are compiled, in place; the outer
-        # Discriminator object (and its AudioSignal-handling forward) stays as-is.
+        # Only the inner BaseDiscriminator submodules are compiled: the outer
+        # Discriminator.forward touches AudioSignal objects, which dynamo cannot trace.
         for i in range(len(discriminator.discriminators)):
             discriminator.discriminators[i] = torch.compile(discriminator.discriminators[i])
 
-        # Either way, .train()/.eval()/.parameters()/state_dict() on `generator`
-        # (and on `discriminator`'s now-compiled children) proxy correctly to the
-        # same underlying parameters -- torch.compile doesn't clone them. The one
-        # thing that does change is that state_dict() keys pick up an
-        # "_orig_mod." segment wherever compilation wrapped something; that's
-        # cleaned up uniformly in checkpoint() below before saving, so resuming
-        # from a checkpoint (which always loads into a freshly-constructed,
-        # uncompiled model first, see above) is unaffected either way.
+        # state_dict() keys gain an '_orig_mod.' segment where compilation applied;
+        # checkpoint() strips it, so resuming works either way.
 
     with argbind.scope(args, "generator"):
         optimizer_g = Adam(generator.parameters(), use_zero=accel.use_ddp)
@@ -386,11 +344,8 @@ def load(
         optimizer_d = Adam(discriminator.parameters(), use_zero=accel.use_ddp)
         scheduler_d = ConstantLR(optimizer_d)
 
-    # Capture the LR the *current* config wants, before it can get clobbered by
-    # loading a checkpoint saved under a different config (e.g. resuming a run
-    # after changing discriminator/Adam.lr) -- optimizer_*.load_state_dict()
-    # below restores the LR that was in effect when the checkpoint was saved,
-    # which would otherwise silently override this run's new config value.
+    # Capture the LR this config asks for before loading a checkpoint, whose
+    # optimizer state would otherwise restore the LR it was saved with.
     configured_lr_g = optimizer_g.param_groups[0]["lr"]
     configured_lr_d = optimizer_d.param_groups[0]["lr"]
 
@@ -406,10 +361,7 @@ def load(
     if "scheduler.pth" in d_extra:
         scheduler_d.load_state_dict(d_extra["scheduler.pth"])
 
-    # Re-apply: keep Adam's loaded momentum/variance state, but force the LR to
-    # match the current config rather than whatever was saved in the checkpoint.
-    # ConstantLR.get_lr() is a no-op past total_iters (default 5, and we're always
-    # resuming well past that), so this sticks and won't get reset by scheduler.step().
+    # Force the LR from the current config, keeping Adam's loaded moments.
     for group in optimizer_g.param_groups:
         group["lr"] = configured_lr_g
     for group in optimizer_d.param_groups:
@@ -483,8 +435,7 @@ def val_loop(batch, state, accel):
         rearrange(spectrogram_with_nyquist, "b c f t -> b 1 f t c").contiguous()
     )
 
-    # Keep the decoder's raw complex field before istft() overwrites nothing but
-    # is the only point at which consistency is still measurable meaningfully.
+    # The decoder's raw complex field, kept before istft() for the consistency check.
     emitted_stft = recons.stft_data.clone()
 
     recons.istft()
@@ -494,9 +445,8 @@ def val_loop(batch, state, accel):
         "mel/loss": state.mel_loss(recons, signal),
         "stft/loss": state.stft_loss(recons, signal),
         "waveform/loss": state.waveform_loss(recons, signal),
-        # Phase diagnostics -- none of the losses above can distinguish coherent
-        # phase from random phase, so these are the only signal that the model
-        # is actually reconstructing the waveform rather than just its envelope.
+        # Phase diagnostics: the losses above are magnitude-only and cannot tell
+        # coherent phase from random phase.
         "phase/error": phase_error(recons, signal),
         "phase/si_sdr": si_sdr(recons, signal),
         "phase/consistency": stft_consistency(
@@ -560,16 +510,9 @@ def train_loop(state, batch, accel, lambdas, disc_loss_ema_decay=0.99, disc_skip
         commitment_loss = out["vq/commitment_losses"]
         codebook_loss = out["vq/codebook_losses"]
         
-    # A static "update D every N steps" throttle can't tell the difference between
-    # "D is dominating" (should skip) and "D needs to catch up" (should update) --
-    # it was fighting itself: strong enough to stop the ~10k-step collapse, but the
-    # same fixed suppression also kept adv/feat_loss completely flat for 70k+
-    # steps (verified: D never learns enough to develop features worth matching).
-    # Adaptive alternative: always compute disc_loss (needed for logging and the
-    # EMA either way), track a running average of it, and only actually give D a
-    # gradient update when that average says it isn't already winning. This lets D
-    # get *more* updates while it's genuinely behind and fewer once it's ahead,
-    # instead of a fixed compromise between the two regimes.
+    # disc_skip_below_loss: skip the discriminator's gradient update while its
+    # running EMA loss is below this threshold, i.e. while it is already winning.
+    # 0.0 (the default, and what the paper used) updates it every step.
     with accel.autocast(dtype=torch.bfloat16):
         output["adv/disc_loss"] = state.gan_loss.discriminator_loss(recons, signal)
 
@@ -622,13 +565,8 @@ def train_loop(state, batch, accel, lambdas, disc_loss_ema_decay=0.99, disc_skip
 
 
 def _compile_clean_state_dict(module):
-    # torch.compile() wraps modules in an OptimizedModule whose state_dict()
-    # keys pick up an "_orig_mod." segment wherever compilation was applied
-    # (either at the top level, e.g. the generator, or nested, e.g. each
-    # compiled BaseDiscriminator inside discriminator.discriminators). Strip
-    # it so checkpoints always use the same clean key names regardless of
-    # whether compile_model was on, and can be loaded into a fresh, uncompiled
-    # model either way.
+    # torch.compile wraps modules in an OptimizedModule whose state_dict keys
+    # gain an '_orig_mod.' segment; strip it so checkpoints load into a plain model.
     return {k.replace("_orig_mod.", ""): v for k, v in module.state_dict().items()}
 
 
@@ -704,14 +642,8 @@ def save_samples(state, val_idx, writer):
 
     recons.istft()
 
-    # The decoder's raw output isn't guaranteed to stay within [-1, 1] (no bounded
-    # output activation, unlike the training target which is peak-safe via
-    # RescaleAudio) -- torch's add_audio() hard-clips any sample outside that
-    # range before writing the WAV, which introduces real digital-clipping
-    # distortion into what we listen to that was never part of training (all
-    # losses are computed on the raw float tensors, never through this clamp).
-    # Peak-rescale here instead: uniformly scales down only if needed, preserving
-    # waveform shape, so listening reflects the actual learned reconstruction.
+    # The decoder's output is not bounded to [-1, 1]; TensorBoard's add_audio()
+    # would hard-clip it, so peak-rescale first. Losses never go through this.
     recons.ensure_max_of_audio(1.0)
 
     audio_dict = {

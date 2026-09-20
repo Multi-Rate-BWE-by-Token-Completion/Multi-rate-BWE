@@ -1,19 +1,12 @@
-"""TransformerModel + an explicit input-bandwidth (cutoff) embedding.
+"""TransformerModel with an explicit embedding of the input cutoff.
 
-The counterpart to the implicit multi-rate arm. There the cutoff is only inferable
-from the input codes -- the spectrum goes quiet above it -- and the model must
-work out which bandwidth it is looking at. Here it is told, via a learned
-embedding indexed by the rate's position in `cutoff_rates`, added to the pooled
-input exactly as the step embedding is.
+Used by the "+ rate emb." ablation: instead of inferring the input bandwidth
+from the codes, the model is told which rate it is seeing. `rate_idx` is the
+position of the cutoff in `cutoff_rates`, and must be supplied on every call
+(scripts/get_samples_bwe.py --rate_idx auto does this at synthesis time).
 
-Worth having both: if implicit matches explicit, the model infers bandwidth from
-the codes and the embedding is unnecessary complexity; if explicit wins, the codes
-alone are ambiguous and that is a fact about the representation. Either outcome is
-reportable, and the pair is what makes it a controlled claim rather than a guess.
-
-The base TransformerModel is untouched: a predictor trained without a rate
-embedding behaves exactly as before, and scripts/train_bwe.py picks the class
-from the `rate_emb` config switch.
+Selected by `rate_emb: true` in the config; a predictor without it behaves
+exactly as TransformerModel.
 """
 import torch
 import torch.nn as nn

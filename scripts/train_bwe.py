@@ -408,10 +408,8 @@ def load_codec(codec, codec_ckpt, args, accel, tracker):
     """
     if codec == "dac":
         from dac_codec.model import DAC    # the vendored DAC code (see NOTICE.md)
-        # package=False rebuilds the model from dac/weights.pth + dac/metadata.pth
-        # using the code in this repository, so the distributed checkpoint does
-        # not have to carry a torch.package copy of it. Verified to give
-        # bit-identical parameters and codes to the packaged checkpoint.
+        # package=False: rebuild from dac/weights.pth + dac/metadata.pth with the
+        # code in this repository, which is what the released checkpoint carries.
         generator, _ = DAC.load_from_folder(folder=codec_ckpt, map_location="cpu",
                                             package=False)
         tracker.print(f"Loaded frozen DAC from {codec_ckpt}: "
@@ -453,12 +451,9 @@ def load_bwe(args, accel, tracker, save_path, codec_ckpt: str = None,
     if "optimizer.pth" in extra:
         optimizer.load_state_dict(extra["optimizer.pth"])
 
-    # lr_override exists for fine-tuning a finished run. Without it, resuming a
-    # finished checkpoint trains at eta_min: load_state_dict restores param_groups
-    # (lr included) and the checkpoint's CosineAnnealingLR has already annealed.
-    # Setting param_groups["lr"] alone is not enough, because the scheduler
-    # recomputes lr from base_lrs on its next step(); so the scheduler is built
-    # AFTER the override and its state is deliberately not restored.
+    # --lr_override is for fine-tuning a finished run: resuming a completed
+    # checkpoint would otherwise train at the annealed eta_min. Setting it
+    # rebuilds the scheduler and discards the checkpoint's scheduler state.
     if lr_override is not None:
         for pg in optimizer.param_groups:
             pg["lr"] = lr_override
