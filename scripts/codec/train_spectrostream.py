@@ -4,15 +4,15 @@ Our reimplementation of Li et al., "SpectroStream: A versatile neural codec for
 general audio" (arXiv:2508.05207); no public implementation exists. The codec is
 trained adversarially, then frozen for the bandwidth-extension experiments.
 
-    torchrun --nproc_per_node=4 scripts/train_codec.py \\
+    torchrun --nproc_per_node=4 scripts/codec/train_spectrostream.py \\
         --args.load conf/codec/spectrostream_48khz.yml \\
         --save_path runs/codec_spectrostream/ --resume --tag latest
 
 Structure and plumbing are inherited from Descript's Audio Codec; see NOTICE.
 Map of the file: dataset plumbing (transform, STFT-collating dataset, loaders) ->
 State and load() -> val_loop / train_loop -> checkpoint, save_samples, validate ->
-train(), the schedule. The codec is adversarial: a generator (sps/model/sps.py)
-against a multi-scale STFT discriminator (sps/model/discriminator.py).
+train(), the schedule. The codec is adversarial: a generator (spectrostream/model/spectrostream.py)
+against a multi-scale STFT discriminator (spectrostream/model/discriminator.py).
 """
 import os
 import sys
@@ -38,7 +38,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append(os.getcwd())
 
-import sps
+import spectrostream
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -61,11 +61,11 @@ def ConstantLR(optimizer, factor: float = 1.0):
 
 
 # Models
-SpS = argbind.bind(sps.model.SpS)
+SpS = argbind.bind(spectrostream.model.SpS)
 # SpectroStream's discriminator (paper Fig. 2): multi-scale, 2-D convolutional,
 # taking (real, imag, modulus) of the STFT. Feature matching against it is what
 # supervises phase; there is no explicit phase loss.
-Discriminator = argbind.bind(sps.model.Discriminator)
+Discriminator = argbind.bind(spectrostream.model.Discriminator)
 
 # Data
 AudioDataset = argbind.bind(BaseAudioDataset, "train", "val")
@@ -109,7 +109,7 @@ class STFTAudioDataset(BaseAudioDataset):
 
 # Loss
 filter_fn = lambda fn: hasattr(fn, "forward") and "Loss" in fn.__name__
-losses = argbind.bind_module(sps.nn.loss, filter_fn=filter_fn)
+losses = argbind.bind_module(spectrostream.nn.loss, filter_fn=filter_fn)
 
 
 

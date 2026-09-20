@@ -8,11 +8,11 @@ Descript's Audio Codec (DAC)**, MIT licensed:
 
 Specifically:
 
-- `sps/` follows DAC's package layout (`model/`, `nn/`) and reuses its building
-  blocks: `sps/nn/layers.py`, `sps/nn/quantize.py`, `sps/nn/loss.py` and
-  `sps/model/base.py` are DAC files, adapted where the spectral-domain codec
+- `spectrostream/` follows DAC's package layout (`model/`, `nn/`) and reuses its building
+  blocks: `spectrostream/nn/layers.py`, `spectrostream/nn/quantize_EMA.py`, `spectrostream/nn/loss.py` and
+  `spectrostream/model/base.py` are DAC files, adapted where the spectral-domain codec
   needs different shapes. Docstrings in those files name the upstream source.
-- `sps/model/transformer.py` is a port of the token-prediction transformer we
+- `bwe/transformer.py` is a port of the token-prediction transformer we
   used in earlier work, itself derived from DAC's `transup` model.
 - The training scripts follow DAC's `argbind` + `audiotools` conventions:
   configuration by YAML with `$include`, `Accelerator`, `Tracker`, dataloaders
@@ -20,7 +20,7 @@ Specifically:
 - `scripts/evaluate.py` follows DAC's evaluation script; ViSQOL, SI-SDR, the
   multi-scale STFT and mel distances are `audiotools`/DAC implementations.
 
-**SpectroStream** (`sps/model/sps.py`) is our own reimplementation of
+**SpectroStream** (`spectrostream/model/spectrostream.py`) is our own reimplementation of
 
 > Y. Li, K. Han, B. McWilliams, Z. Borsos, M. Tagliasacchi,
 > "SpectroStream: A versatile neural codec for general audio", arXiv:2508.05207, 2025.
@@ -29,7 +29,7 @@ No public implementation exists; the architecture follows the paper, and any
 error in it is ours.
 
 `dac_codec/` is **DAC's own code**, MIT licensed, vendored unchanged from the copy
-used to train the DAC codec of the paper (`scripts/train_codec_dac.py` is its
+used to train the DAC codec of the paper (`scripts/codec/train_dac.py` is its
 training script). It is included so that the exact code behind the released DAC
 checkpoint, and behind the mel metric reported in the paper, is in this
 repository rather than assumed from a pip package.

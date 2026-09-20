@@ -42,7 +42,7 @@ from einops import rearrange
 sys.path.append(os.getcwd())
 _here = os.path.dirname(os.path.abspath(__file__))
 
-_spec = importlib.util.spec_from_file_location("train_bwe", os.path.join(_here, "train_bwe.py"))
+_spec = importlib.util.spec_from_file_location("bwe_train", os.path.join(_here, "train.py"))
 tb = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tb)
 

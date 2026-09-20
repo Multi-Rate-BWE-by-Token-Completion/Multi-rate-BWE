@@ -9,7 +9,7 @@ from einops import rearrange
 from torch.nn.utils import weight_norm
 from typing import List, Tuple
 
-from .sps import init_weights
+from .spectrostream import init_weights
 
 
 class SampleLayerNorm(nn.Module):

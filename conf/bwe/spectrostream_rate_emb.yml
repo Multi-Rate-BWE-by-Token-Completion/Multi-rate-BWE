@@ -4,7 +4,7 @@
 #
 # rate_emb: true makes train_bwe.py build RateTransformerModel, which adds a
 # learned embedding of the rate index to the pooled input. At synthesis time the
-# index must be supplied: get_samples_bwe.py --rate_idx auto.
+# index must be supplied: scripts/bwe/synthesize.py --rate_idx auto.
 $include:
   - conf/bwe/spectrostream_multirate.yml
 

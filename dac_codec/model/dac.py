@@ -12,7 +12,6 @@ from .base import CodecMixin
 from dac_codec.nn.layers import Snake1d
 from dac_codec.nn.layers import WNConv1d
 from dac_codec.nn.layers import WNConvTranspose1d
-#from dac_codec.nn.random_quantize import RandomResidualVectorQuantize
 from dac_codec.nn.quantize import ResidualVectorQuantize
 
 
@@ -184,15 +183,6 @@ class DAC(BaseModel, CodecMixin):
         self.codebook_size = codebook_size
         self.codebook_dim = codebook_dim
 
-        """
-        self.quantizer = RandomResidualVectorQuantize(
-            input_dim=latent_dim,
-            n_codebooks=n_codebooks,
-            codebook_size=codebook_size,
-            codebook_dim=codebook_dim,
-            quantizer_dropout=quantizer_dropout,
-        )
-        """
 
         self.quantizer = ResidualVectorQuantize(
             input_dim=latent_dim,

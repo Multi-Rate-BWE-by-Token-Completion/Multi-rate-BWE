@@ -44,19 +44,20 @@ from torch.utils.tensorboard import SummaryWriter
 from torcheval.metrics.functional import multiclass_accuracy
 
 sys.path.append(os.getcwd())
-import sps  # noqa: E402
+import spectrostream  # noqa: E402
+import bwe  # noqa: E402
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.backends.cudnn.benchmark = bool(int(os.getenv("CUDNN_BENCHMARK", 1)))
 
 Accelerator = argbind.bind(ml.Accelerator, without_prefix=True)
 AdamW = argbind.bind(torch.optim.AdamW, "transformer")
-SpS = argbind.bind(sps.model.SpS)
-TransformerModel = argbind.bind(sps.model.TransformerModel)
-RateTransformerModel = argbind.bind(sps.model.RateTransformerModel)
+SpS = argbind.bind(spectrostream.model.SpS)
+TransformerModel = argbind.bind(bwe.TransformerModel)
+RateTransformerModel = argbind.bind(bwe.RateTransformerModel)
 
 # --------------------------------------------------------------------------
-# Dataset plumbing, mirroring train_codec.py so the frozen encoder sees exactly
+# Dataset plumbing, mirroring scripts/codec/train_spectrostream.py so the frozen encoder sees exactly
 # the data distribution and STFT parameters it was trained on.
 # --------------------------------------------------------------------------
 AudioDataset = argbind.bind(BaseAudioDataset, "train", "val")
@@ -402,7 +403,7 @@ def save_samples(state, val_idx, writer, accel, cutoff_sr, n_codebooks, n_pred_t
 def load_codec(codec, codec_ckpt, args, accel, tracker):
     """Load and freeze the tokenizer.
 
-    SpectroStream: a generator.pth written by scripts/train_codec.py.
+    SpectroStream: a generator.pth written by scripts/codec/train_spectrostream.py.
     DAC: a run folder holding dac/weights.pth, which carries its own
     hyperparameters, so nothing has to be restated in the config.
     """

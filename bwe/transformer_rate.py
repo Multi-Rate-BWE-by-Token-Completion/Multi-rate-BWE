@@ -3,7 +3,7 @@
 Used by the "+ rate emb." ablation: instead of inferring the input bandwidth
 from the codes, the model is told which rate it is seeing. `rate_idx` is the
 position of the cutoff in `cutoff_rates`, and must be supplied on every call
-(scripts/get_samples_bwe.py --rate_idx auto does this at synthesis time).
+(scripts/bwe/synthesize.py --rate_idx auto does this at synthesis time).
 
 Selected by `rate_emb: true` in the config; a predictor without it behaves
 exactly as TransformerModel.

@@ -4,7 +4,7 @@ This is NOT a Descript-released checkpoint: the DAC used in the paper is retrain
 here at 48 kHz with 12 codebooks (12 x 10 bits x 93.75 Hz = 11.25 kbit/s), on the
 same data as the SpectroStream codec.
 
-    python scripts/train_codec_dac.py --args.load conf/codec/dac_48khz.yml \\
+    python scripts/codec/train_dac.py --args.load conf/codec/dac_48khz.yml \\
         --save_path runs/codec_dac_48khz/
 
 The model code in dac_codec/ is Descript's Audio Codec, MIT licensed, vendored so

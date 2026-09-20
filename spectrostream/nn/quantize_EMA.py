@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from sps.nn.layers import WNConv1d
+from spectrostream.nn.layers import WNConv1d
 
 
 def _flatten_latents(latents: torch.Tensor) -> torch.Tensor:

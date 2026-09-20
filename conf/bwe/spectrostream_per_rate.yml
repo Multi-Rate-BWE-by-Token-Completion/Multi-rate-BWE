@@ -2,7 +2,7 @@
 # config except that a single cutoff is drawn, so the model only ever sees one
 # input bandwidth. Train one run per rate, overriding the rate on the CLI:
 #
-#   python scripts/train_bwe.py --args.load conf/bwe/spectrostream_per_rate.yml \
+#   python scripts/bwe/train.py --args.load conf/bwe/spectrostream_per_rate.yml \
 #     --cutoff_rates [8000] --save_path runs/bwe_sps_8k/
 $include:
   - conf/bwe/spectrostream_multirate.yml

@@ -230,7 +230,6 @@ class CodecMixin:
             codes = codes[:, :n_quantizers, :]
 
         self.padding = original_padding
-        #return sps_file
         return codes
 
     @torch.no_grad()

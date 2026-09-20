@@ -56,7 +56,6 @@ class VectorQuantize(nn.Module):
 
         # Factorized codes (ViT-VQGAN) Project input into low-dimensional space
         z_e = self.in_proj(z)  # z_e : (B x D x T)
-        #z_e = z
         z_q, indices = self.decode_latents(z_e)
 
         commitment_loss = F.mse_loss(z_e, z_q.detach(), reduction="none").mean([1, 2])

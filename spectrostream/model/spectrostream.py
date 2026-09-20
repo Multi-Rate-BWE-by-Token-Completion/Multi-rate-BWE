@@ -13,10 +13,10 @@ from torch import nn
 from torch.nn.utils import weight_norm
 
 from .base import CodecMixin
-from sps.nn.layers import Snake1d
-from sps.nn.layers import WNConv1d
-from sps.nn.layers import WNConvTranspose1d
-from sps.nn.quantize_EMA import ResidualVectorQuantizeEMA
+from spectrostream.nn.layers import Snake1d
+from spectrostream.nn.layers import WNConv1d
+from spectrostream.nn.layers import WNConvTranspose1d
+from spectrostream.nn.quantize_EMA import ResidualVectorQuantizeEMA
 
 
 
@@ -42,9 +42,7 @@ class EncoderBlock(nn.Module):
         self.N_out = N_out
         self.stride = stride
         self.k_size_2 = (max(3,2*self.stride[0]), max(3,2*self.stride[1]))
-        #self.k_size_2 = (2+self.stride[0], 2+self.stride[1])
         self.padding_2 = ((self.stride[0]+1)//2, (self.stride[1]+1)//2)
-        #self.padding_2 = (1,1)
         
         self.block = nn.Sequential(
             nn.ELU(),
@@ -144,11 +142,8 @@ class DecoderBlock(nn.Module):
         self.N_out=N_out
         self.stride=stride
         self.k_size_2 = (max(3,2*self.stride[0]), max(3,2*self.stride[1]))
-        #self.k_size_2 = (2+self.stride[0], 2+self.stride[1])
         self.padding_2 = ((self.stride[0]+1)//2, (self.stride[1]+1)//2)
-        #self.padding_2 = (1,1)
         self.output_padding = (max(0, (self.stride[0] - 1)//2), max(0, (self.stride[1] - 1)//2))
-        #self.output_padding = (0,0)
         
         if self.stride == (1,1) :
             self.block = nn.Sequential(
@@ -167,32 +162,6 @@ class DecoderBlock(nn.Module):
             )
                 
 
-        """
-        if self.stride == (1,1) :
-            self.block = nn.Sequential(
-                nn.ELU(),
-                weight_norm(nn.Conv2d(in_channels=self.N_in, out_channels=self.N_out, kernel_size=(3,3), padding=(1,1))),
-                nn.ELU(),
-                weight_norm(nn.Conv2d(in_channels=self.N_out, out_channels=self.N_out, kernel_size=(3,3), padding=(1,1))),
-                )
-        else :
-        
-            self.block = nn.Sequential(
-                nn.ELU(),
-                weight_norm(nn.Conv2d(in_channels=self.N_in, out_channels=self.N_out, kernel_size=(3,3), padding=(1,1))),
-                nn.ELU(),
-                weight_norm(nn.ConvTranspose2d(in_channels=self.N_out, out_channels=self.N_out, kernel_size=self.k_size_2, stride=self.stride, padding=self.padding_2, output_padding=self.output_padding)),
-                )
-        """
-        """
-        self.block = nn.Sequential(
-            nn.ELU(),
-            weight_norm(nn.Conv2d(in_channels=self.N_in, out_channels=self.N_out, kernel_size=(3,3), padding=(1,1))),
-            nn.ELU(),
-            nn.Upsample(scale_factor=self.stride, mode='nearest'),
-            weight_norm(nn.Conv2d(in_channels=self.N_out, out_channels=self.N_out, kernel_size=(3,3), padding=(1,1))),
-        )
-        """
         
         if self.N_in != self.N_out :
             self.projection = nn.Conv2d(in_channels=self.N_in, out_channels=self.N_out, kernel_size=(1,1))
@@ -204,7 +173,6 @@ class DecoderBlock(nn.Module):
         y = self.block(x)
 
         if self.stride != (1,1) :
-            #res = y + self.projection(nn.functional.interpolate(x, size = y.size()[-2:], mode="bilinear")#'nearest'))
             res = y + nn.functional.interpolate(self.projection(x), size = y.size()[-2:], mode="bilinear")#'nearest')
         else :
             res = y + self.projection(x)
@@ -291,7 +259,6 @@ class SpS(BaseModel, CodecMixin):
     ):
         super().__init__()
 
-        #self.hop_length = np.prod([stride[1] for stride in encoder_strides])
         encoder_strides = [tuple(stride) for stride in encoder_strides]
         decoder_strides = [tuple(stride) for stride in decoder_strides]
 
@@ -388,13 +355,6 @@ class SpS(BaseModel, CodecMixin):
         """
         z = self.encoder(spectrogram)
 
-        """
-        z_q = nn.Identity()(z)
-        codes = None
-        latents = None
-        commitment_loss = torch.tensor(0.0, device=z.device)
-        codebook_loss = torch.tensor(0.0, device=z.device)
-        """
         z_q, codes, latents, commitment_loss, codebook_loss = self.quantizer(
             z, n_quantizers=n_quantizers, bypass=bypass
         )

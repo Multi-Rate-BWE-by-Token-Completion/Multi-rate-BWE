@@ -12,7 +12,7 @@ rate_emb: false
 cutoff_rates: [8000, 16000, 24000, 32000]   # drawn uniformly per batch
 cutoff_sr: 16000                            # fallback if cutoff_rates is empty
 
-# Frozen codec: the generator.pth written by scripts/train_codec.py.
+# Frozen codec: the generator.pth written by scripts/codec/train_spectrostream.py.
 codec_ckpt: runs/codec_spectrostream/500k/generator.pth
 n_codebooks: 48          # first 48 of 64 levels = 12 kbit/s
 n_pred_tokens: 48

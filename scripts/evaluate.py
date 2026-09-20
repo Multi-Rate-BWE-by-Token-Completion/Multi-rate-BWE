@@ -9,7 +9,7 @@ metrics reported in the paper:
                   bins, log10 of the squared magnitude plus a linear term, L1,
                   summed over resolutions. Taken from dac_codec/nn/loss.py, so it
                   is the same metric DAC and our earlier work report. It is NOT
-                  the SpectroStream training mel in sps/nn/loss.py.
+                  the SpectroStream training mel in spectrostream/nn/loss.py.
     stft          multi-resolution STFT distance, windows {2048, 512}
     waveform      waveform L1
     sisdr         scale-invariant SDR, stored as a LOSS (negate for dB)
@@ -40,7 +40,7 @@ from audiotools.ml.decorators import Tracker
 
 sys.path.append(os.getcwd())
 from dac_codec.nn.loss import MelSpectrogramLoss  # noqa: E402  (DAC's mel: the reported metric)
-from sps.nn.loss import L1Loss, MultiScaleSTFTLoss, SISDRLoss  # noqa: E402
+from spectrostream.nn.loss import L1Loss, MultiScaleSTFTLoss, SISDRLoss  # noqa: E402
 
 
 @dataclass

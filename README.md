@@ -24,23 +24,21 @@ This is the code used for the paper.
 ## What is here
 
 ```
-sps/                     SpectroStream: codec, discriminator and the predictor transformer
-  model/sps.py             the codec (our reimplementation of arXiv:2508.05207)
-  model/transformer.py     predictor, autoregressive over RVQ depth
-  model/transformer_rate.py  the same plus a learned cutoff embedding (ablation)
-  nn/                      layers, quantizers, losses
-dac_codec/               DAC (Descript's Audio Codec), vendored: the exact code that
-                         trained our 48 kHz DAC, and the source of the reported mel
+spectrostream/           the SpectroStream codec: encoder/decoder, RVQ, discriminator
+dac_codec/               the DAC codec (Descript's code, vendored): what we retrained
+bwe/                     the bandwidth-extension predictor, shared by both codecs
+  transformer.py           autoregressive over RVQ depth
+  transformer_rate.py      + a learned embedding of the input cutoff (ablation)
 scripts/
-  train_codec.py         train the SpectroStream codec
-  train_codec_dac.py     retrain the DAC codec at 48 kHz (our codec, not a release)
-  train_bwe.py           train a bandwidth-extension predictor (all four arms)
-  get_samples_bwe.py     synthesis: band-limited codes -> extended audio
-  evaluate.py            objective metrics (ViSQOL, mel, STFT, waveform, SI-SDR)
-  make_testsets.py       build the evaluation excerpts and band-limited partners
-  make_filelists.py      build training file lists, with the bandwidth filter
-  download_checkpoints.py  fetch the released weights
-  export_checkpoints.py    how those weights were produced
+  codec/train_spectrostream.py   train the SpectroStream codec
+  codec/train_dac.py             retrain the DAC codec at 48 kHz
+  bwe/train.py                   train a predictor (all four arms of the paper)
+  bwe/synthesize.py              band-limited codes -> extended audio
+  evaluate.py                    objective metrics (ViSQOL, mel, STFT, waveform, SI-SDR)
+  make_testsets.py               build the evaluation excerpts and their partners
+  make_filelists.py              build training file lists, with the bandwidth filter
+  download_checkpoints.py        fetch the released weights
+  export_checkpoints.py          how those weights were produced
 conf/
   codec/spectrostream_48khz.yml   the SpectroStream codec of the paper
   codec/dac_48khz.yml             the DAC codec we retrained
@@ -78,7 +76,7 @@ No training needed â€” fetch the weights and extend a test set:
 ```bash
 python scripts/download_checkpoints.py
 
-python scripts/get_samples_bwe.py --args.load conf/bwe/spectrostream_multirate.yml \
+python scripts/bwe/synthesize.py --args.load conf/bwe/spectrostream_multirate.yml \
     --codec_ckpt checkpoints/spectrostream_48khz_500k.pth \
     --save_path checkpoints/bwe_spectrostream_multirate --tag 25k \
     --input samples/input_25s_16-48 --output samples/out_16k \
@@ -141,7 +139,7 @@ and a different `--output` / `--dst_prefix`.
 ### 1. The codec
 
 ```bash
-torchrun --nproc_per_node=4 scripts/train_codec.py \
+torchrun --nproc_per_node=4 scripts/codec/train_spectrostream.py \
     --args.load conf/codec/spectrostream_48khz.yml \
     --save_path runs/codec_spectrostream/ --resume --tag latest
 ```
@@ -154,7 +152,7 @@ The DAC codec of the paper is **retrained by us**, not a Descript release: 48 kH
 12 codebooks (11.25 kbit/s), 44k steps, on the same data.
 
 ```bash
-python scripts/train_codec_dac.py --args.load conf/codec/dac_48khz.yml \
+python scripts/codec/train_dac.py --args.load conf/codec/dac_48khz.yml \
     --save_path runs/codec_dac_48khz/
 ```
 
@@ -167,19 +165,19 @@ input rates and whether a cutoff embedding is used.
 
 ```bash
 # the proposed model: one predictor for 8/16/24/32 kHz, no rate conditioning
-python scripts/train_bwe.py --args.load conf/bwe/spectrostream_multirate.yml \
+python scripts/bwe/train.py --args.load conf/bwe/spectrostream_multirate.yml \
     --save_path runs/bwe_sps_multirate/ --resume --tag latest
 
 # one predictor per input rate (Table 3, "Per-rate"): one run per rate
-python scripts/train_bwe.py --args.load conf/bwe/spectrostream_per_rate.yml \
+python scripts/bwe/train.py --args.load conf/bwe/spectrostream_per_rate.yml \
     --cutoff_rates [8000] --save_path runs/bwe_sps_8k/ --resume --tag latest
 
 # + explicit cutoff embedding (Table 3, "+rate emb.")
-python scripts/train_bwe.py --args.load conf/bwe/spectrostream_rate_emb.yml \
+python scripts/bwe/train.py --args.load conf/bwe/spectrostream_rate_emb.yml \
     --save_path runs/bwe_sps_rate_emb/ --resume --tag latest
 
 # the same predictor on the DAC codec (Table 1, "Ours (DAC)")
-python scripts/train_bwe.py --args.load conf/bwe/dac_multirate.yml \
+python scripts/bwe/train.py --args.load conf/bwe/dac_multirate.yml \
     --save_path runs/bwe_dac_multirate/ --resume --tag latest
 ```
 
@@ -196,13 +194,13 @@ Compute, as configured: the predictors train on a single GPU at batch 16 (DAC at
 The codec is the expensive part. Both trainers resume with `--resume --tag latest`.
 `torchrun` also works for the predictors, but the transformer selects one output
 head per step, so DDP needs `find_unused_parameters=True` (see the note in
-`sps/model/transformer.py`).
+`bwe/transformer.py`).
 
 ## Synthesis and evaluation
 
 ```bash
 # extend a test set; k=1 decodes the first predicted level (see below)
-python scripts/get_samples_bwe.py --args.load conf/bwe/spectrostream_multirate.yml \
+python scripts/bwe/synthesize.py --args.load conf/bwe/spectrostream_multirate.yml \
     --save_path runs/bwe_sps_multirate/ --tag 25k \
     --input samples/input_25s_16-48 --output samples/out_16k \
     --batch_size 8 --seed 0 --top_p 0 --xfade 20 --n_decode 1
@@ -234,7 +232,7 @@ The reported **mel is DAC's**: `dac_codec/nn/loss.py`, built with its defaults â
 two resolutions, window lengths {2048, 512}, {150, 80} mel bins, log10 of the
 squared magnitude plus a linear term. It is the same metric DAC and our earlier
 work report, so the numbers are comparable with them. It is *not* the
-SpectroStream training mel in `sps/nn/loss.py`, which is a different objective and
+SpectroStream training mel in `spectrostream/nn/loss.py`, which is a different objective and
 is never used for evaluation.
 
 ## Pretrained models
