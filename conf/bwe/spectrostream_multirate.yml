@@ -1,0 +1,68 @@
+# THE MODEL PROPOSED IN THE PAPER: one predictor for 8/16/24/32 kHz inputs on the
+# SpectroStream codec, with NO cutoff conditioning (the bandwidth is inferred
+# from the codes). Table 1 "Ours (SpectroStream)" and Table 3 "Multi-rate".
+#
+# Brings in the codec architecture, which train_bwe.py needs to rebuild the
+# frozen generator, plus the data transform.
+$include:
+  - conf/codec/spectrostream_48khz.yml
+
+codec: spectrostream
+rate_emb: false
+cutoff_rates: [8000, 16000, 24000, 32000]   # drawn uniformly per batch
+cutoff_sr: 16000                            # fallback if cutoff_rates is empty
+
+# Frozen codec: the generator.pth written by scripts/train_codec.py.
+codec_ckpt: runs/codec_spectrostream/500k/generator.pth
+n_codebooks: 48          # first 48 of 64 levels = 12 kbit/s
+n_pred_tokens: 48
+
+# Predictor: 6 layers, d_model 1024, 8 heads, FFN 4096 (paper Sec. 2.3).
+# n_input_embs = n_codebooks + (n_pred_tokens - 1) = 48 + 47 = 95: the
+# band-limited levels plus the full-band levels already predicted.
+TransformerModel.n_input_embs: 95
+TransformerModel.n_pred_tokens: 48
+TransformerModel.ntoken_input: 1024
+TransformerModel.ntoken_output: 1024
+TransformerModel.ninp: 1024
+TransformerModel.nhead: 8
+TransformerModel.nhid: 4096
+TransformerModel.nlayers: 6
+TransformerModel.dropout: 0.0
+TransformerModel.input_pool: concat      # embed per level, concatenate, project
+TransformerModel.emb_dim: 64
+TransformerModel.input_norm: true        # LayerNorm on the pooled embedding
+
+transformer/AdamW.lr: 0.0001
+transformer/AdamW.betas: [0.8, 0.99]
+transformer/ScheduleLR.T_max: 100000     # cosine schedule
+amp: false
+device: cuda
+num_iters: 100000
+save_iters: [5000, 10000, 25000, 50000, 100000]
+valid_freq: 500
+sample_freq: 2000
+val_idx: [0, 1, 2, 3]
+train/AudioDataset.duration: 5.0
+val/AudioDataset.duration: 5.0
+batch_size: 16
+val_batch_size: 16
+num_workers: 8
+AudioDataset.without_replacement: false
+
+# Predictor training mixture (paper Sec. 3.1): Jamendo (bandwidth-filtered),
+# MedleyDB, the MUSDB18 training split and ENST-Drums.
+train/build_dataset.weights: [0.766, 0.106, 0.064, 0.064]
+train/build_dataset.folders:
+  music_hq:
+    - filelists/train_jamendo_hq.csv
+    - filelists/train_medleydb.csv
+    - filelists/train_musdb.csv
+    - filelists/train_enst_drums.csv
+val/build_dataset.weights: [0.766, 0.106, 0.064, 0.064]
+val/build_dataset.folders:
+  music_hq:
+    - filelists/val_jamendo_hq.csv
+    - filelists/val_medleydb.csv
+    - filelists/val_musdb.csv
+    - filelists/val_enst_drums.csv

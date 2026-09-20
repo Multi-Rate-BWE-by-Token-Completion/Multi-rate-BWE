@@ -1,0 +1,24 @@
+# MULTI-RATE + EXPLICIT CUTOFF EMBEDDING (Table 3, "+rate emb."): the ablation
+# that tests whether telling the model the input bandwidth helps. It does not:
+# the cutoff is already recoverable from the codes.
+#
+# rate_emb: true makes train_bwe.py build RateTransformerModel, which adds a
+# learned embedding of the rate index to the pooled input. At synthesis time the
+# index must be supplied: get_samples_bwe.py --rate_idx auto.
+$include:
+  - conf/bwe/spectrostream_multirate.yml
+
+rate_emb: true
+RateTransformerModel.n_input_embs: 95
+RateTransformerModel.n_pred_tokens: 48
+RateTransformerModel.ntoken_input: 1024
+RateTransformerModel.ntoken_output: 1024
+RateTransformerModel.ninp: 1024
+RateTransformerModel.nhead: 8
+RateTransformerModel.nhid: 4096
+RateTransformerModel.nlayers: 6
+RateTransformerModel.dropout: 0.0
+RateTransformerModel.input_pool: concat
+RateTransformerModel.emb_dim: 64
+RateTransformerModel.input_norm: true
+RateTransformerModel.n_rates: 4          # must match len(cutoff_rates)

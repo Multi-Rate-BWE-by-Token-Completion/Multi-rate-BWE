@@ -1,0 +1,22 @@
+# The DAC codec used in the paper: upstream Descript Audio Codec, retrained at
+# 48 kHz with 12 codebooks (12 x 10 bits x 93.75 Hz = 11.25 kbit/s), against
+# SpectroStream's 48 x 10 x 25 Hz = 12 kbit/s.
+#
+# These are the constructor arguments of the trained codec (they are also stored
+# inside the checkpoint package, which is why conf/bwe/dac_multirate.yml does not
+# restate them: DAC.load_from_folder reads them back).
+#
+# Train it with the upstream DAC trainer
+# (https://github.com/descriptinc/descript-audio-codec, scripts/train.py) on the
+# same data as the SpectroStream codec, then point
+# conf/bwe/dac_multirate.yml:codec_ckpt at the resulting run folder.
+DAC.sample_rate: 48000
+DAC.encoder_dim: 64
+DAC.encoder_rates: [2, 4, 8, 8]
+DAC.latent_dim: 1024
+DAC.decoder_dim: 1536
+DAC.decoder_rates: [8, 8, 4, 2]
+DAC.n_codebooks: 12
+DAC.codebook_size: 1024
+DAC.codebook_dim: 8
+DAC.quantizer_dropout: false

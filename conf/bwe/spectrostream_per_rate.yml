@@ -1,0 +1,11 @@
+# ONE PREDICTOR PER INPUT RATE (Table 3, "Per-rate"): identical to the multi-rate
+# config except that a single cutoff is drawn, so the model only ever sees one
+# input bandwidth. Train one run per rate, overriding the rate on the CLI:
+#
+#   python scripts/train_bwe.py --args.load conf/bwe/spectrostream_per_rate.yml \
+#     --cutoff_rates [8000] --save_path runs/bwe_sps_8k/
+$include:
+  - conf/bwe/spectrostream_multirate.yml
+
+cutoff_rates: [16000]
+cutoff_sr: 16000

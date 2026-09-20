@@ -1,0 +1,27 @@
+# THE SAME MULTI-RATE PREDICTOR ON THE DAC CODEC (Table 1, "Ours (DAC)").
+# Only the codec changes, so the token stream is the single variable: the
+# transformer, the cutoff draw, the data, schedule, optimiser and band-limiting
+# are inherited unchanged from the SpectroStream arm.
+#
+# DAC is waveform-domain: 12 codebooks of 1024 entries at 93.75 Hz = 11.25 kbit/s,
+# against SpectroStream's 48 x 1024 at 25 Hz = 12 kbit/s.
+$include:
+  - conf/bwe/spectrostream_multirate.yml
+
+codec: dac
+# A DAC run FOLDER (containing dac/weights.pth), not a .pth: DAC ships its
+# hyperparameters inside the package, so nothing has to be restated here.
+codec_ckpt: runs/codec_dac_48khz
+
+n_codebooks: 12
+n_pred_tokens: 12
+TransformerModel.n_input_embs: 23        # 12 + 11
+TransformerModel.n_pred_tokens: 12
+
+# DAC emits 93.75 Hz frames against SpectroStream's 25 Hz, so at equal duration
+# the sequence is 3.75x longer and attention is quadratic in frames. Duration is
+# matched at 2.5 s rather than frame count, so both models see the same audio.
+train/AudioDataset.duration: 2.5
+val/AudioDataset.duration: 2.5
+batch_size: 16
+val_batch_size: 16
