@@ -18,14 +18,17 @@ val_<name>.csv after a seeded shuffle.
 Example (the sources used in the paper)
 ---------------------------------------
     python scripts/make_filelists.py --outdir filelists \
-        --source jamendo='/data/jamendo/audio/*/*.mp3' \
-        --source musdb='/data/musdb18/train/Mixtures/*.wav' \
-        --source medleydb='/data/MedleyDB/train/**/*.wav' \
-        --source enst_drums='/data/ENST-drums/train/**/*.wav' \
-        --min-cliff jamendo=19 --holdout jamendo=300
+        --source jamendo_hq='/data/jamendo/audio/*/*.mp3' \
+        --min-cliff jamendo_hq=19 --holdout jamendo_hq=300 \
+        --source train_musdb='/data/musdb18/train/Mixtures/*.wav' \
+        --source val_musdb='/data/musdb18/test/Mixtures/*.wav' \
+        --source train_medleydb='/data/MedleyDB/train/**/*.wav' \
+        --source val_medleydb='/data/MedleyDB/test/**/*.wav' \
+        --source train_enst_drums='/data/ENST-drums/train/**/*.wav' \
+        --source val_enst_drums='/data/ENST-drums/test/**/*.wav'
 
-Then point the config at the results, e.g. filelists/train_jamendo.csv. The
-configs shipped here expect train_/val_ prefixes; rename or adjust as needed.
+Those are the names conf/bwe/*.yml reads: a train_/val_ pair per corpus, with the
+Jamendo pair produced by --holdout.
 """
 import argparse
 import csv
@@ -97,7 +100,7 @@ def main():
                     help="a named glob of audio files; repeatable")
     ap.add_argument("--min-cliff", action="append", metavar="NAME=KHZ",
                     help="keep only files whose effective bandwidth reaches KHZ "
-                         "(the paper uses jamendo=19); repeatable")
+                         "(the paper uses jamendo_hq=19); repeatable")
     ap.add_argument("--holdout", action="append", metavar="NAME=N",
                     help="split a source into train_/val_ with N validation files")
     ap.add_argument("--outdir", default="filelists")

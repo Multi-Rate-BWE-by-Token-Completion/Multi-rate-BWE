@@ -811,33 +811,3 @@ if __name__ == "__main__":
             if accel.local_rank != 0:
                 sys.tracebacklimit = 0
             train(args, accel) 
-
-"""
-{
-    'idx': 12, 
-    'transform_args': {
-        'Compose': {
-            '0.preprocess': {
-                '0.Identity': {'mask': tensor(True)}, 
-                'mask': tensor(True)
-                }, 
-            '1.augment': {
-                '0.Identity': {'mask': tensor(True)}, 
-                'mask': tensor(False)
-                }, 
-            '2.postprocess': {
-                '0.VolumeNorm': {'db': tensor(-16), 'mask': tensor(True)}, 
-                '1.RescaleAudio': {'mask': tensor(True)}, 
-                '2.ShiftPhase': {'shift': tensor(-2.9316), 'mask': tensor(True)}, 
-                'mask': tensor(True)
-                }, 
-            'mask': tensor(True)
-            }
-        }, 
-    'signal': <audiotools.core.audio_signal.AudioSignal object at 0x7fcd4cda4bd0>, 
-    'source_idx': 1, 
-    'item_idx': 13, 
-    'source': '/path/to/musdb18/train/Mixtures', 
-    'path': '/path/to/musdb18/train/Mixtures/<track>.wav'
-    }
-"""

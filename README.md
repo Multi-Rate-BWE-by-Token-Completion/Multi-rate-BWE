@@ -71,6 +71,29 @@ Configuration uses [argbind](https://github.com/pseeth/argbind): every value in 
 YAML file can be overridden on the command line (`--batch_size 8`), and
 `$include` composes files.
 
+## Quick start: run the released models
+
+No training needed — fetch the weights and extend a test set:
+
+```bash
+python scripts/download_checkpoints.py
+
+python scripts/get_samples_bwe.py --args.load conf/bwe/spectrostream_multirate.yml \
+    --codec_ckpt checkpoints/spectrostream_48khz_500k.pth \
+    --save_path checkpoints/bwe_spectrostream_multirate --tag 25k \
+    --input samples/input_25s_16-48 --output samples/out_16k \
+    --batch_size 8 --seed 0 --top_p 0 --xfade 20 --n_decode 1
+
+python scripts/evaluate.py --input samples/input_25s_16-48 \
+    --output samples/out_16k/predicted_k1 --n_proc 32
+```
+
+The input folder is built by `scripts/make_testsets.py` (next section); any folder
+of `sample_<i>_sr48000.wav` references with `sample_<i>_sr<rate>.wav` partners
+works. For the DAC arm, swap in `conf/bwe/dac_multirate.yml`,
+`--codec_ckpt checkpoints/dac_48khz_12cb` and
+`--save_path checkpoints/bwe_dac_multirate`.
+
 ## Data
 
 The codecs are trained on Jamendo and the MUSDB18 training split. The predictors
@@ -79,12 +102,19 @@ and ENST-Drums, weighted 0.766 / 0.106 / 0.064 / 0.064.
 
 ```bash
 python scripts/make_filelists.py --outdir filelists \
-    --source jamendo='/data/jamendo/audio/*/*.mp3' \
-    --source medleydb='/data/MedleyDB/train/**/*.wav' \
-    --source musdb='/data/musdb18/train/Mixtures/*.wav' \
-    --source enst_drums='/data/ENST-drums/train/**/*.wav' \
-    --min-cliff jamendo=19 --holdout jamendo=300
+    --source jamendo_hq='/data/jamendo/audio/*/*.mp3' \
+    --min-cliff jamendo_hq=19 --holdout jamendo_hq=300 \
+    --source train_medleydb='/data/MedleyDB/train/**/*.wav' \
+    --source val_medleydb='/data/MedleyDB/test/**/*.wav' \
+    --source train_musdb='/data/musdb18/train/Mixtures/*.wav' \
+    --source val_musdb='/data/musdb18/test/Mixtures/*.wav' \
+    --source train_enst_drums='/data/ENST-drums/train/**/*.wav' \
+    --source val_enst_drums='/data/ENST-drums/test/**/*.wav'
 ```
+
+These are exactly the file names `conf/bwe/*.yml` reads: `train_jamendo_hq.csv`,
+`val_jamendo_hq.csv` (the Jamendo holdout), and a `train_`/`val_` pair for each
+other corpus.
 
 `--min-cliff jamendo=19` is the filter of the paper: about half of Jamendo is
 MP3-sourced and brick-wall lowpassed, so only the files whose effective bandwidth
@@ -102,7 +132,9 @@ python scripts/make_testsets.py rates \
 ```
 
 This writes `samples/input_25s_<k>-48/`, each holding `sample_<i>_sr48000.wav`
-references and their `sample_<i>_sr<rate>.wav` band-limited partners.
+references and their `sample_<i>_sr<rate>.wav` band-limited partners. The
+out-of-domain set is the same two commands with `--source /data/OrchideaSOL/...`
+and a different `--output` / `--dst_prefix`.
 
 ## Training
 
@@ -114,7 +146,8 @@ torchrun --nproc_per_node=4 scripts/train_codec.py \
     --save_path runs/codec_spectrostream/ --resume --tag latest
 ```
 
-500k steps, batch 64 over 4 GPUs. The codec is then frozen; the predictors read
+500k steps, batch 64 over 4 GPUs (the batch is global: `audiotools` divides it by
+the world size). The codec is then frozen; the predictors read
 `runs/codec_spectrostream/<tag>/generator.pth`.
 
 The DAC codec of the paper is **retrained by us**, not a Descript release: 48 kHz,
@@ -157,6 +190,13 @@ checkpoint (`--tag 25k`), which the configs save.
 The two switches that carry the multi-rate claim are `cutoff_rates` (a list
 drawn uniformly per batch; a single entry gives a per-rate model) and `rate_emb`
 (false in the proposed model).
+
+Compute, as configured: the predictors train on a single GPU at batch 16 (DAC at
+2.5 s excerpts rather than 5 s, because its sequences are 3.75x longer in frames).
+The codec is the expensive part. Both trainers resume with `--resume --tag latest`.
+`torchrun` also works for the predictors, but the transformer selects one output
+head per step, so DDP needs `find_unused_parameters=True` (see the note in
+`sps/model/transformer.py`).
 
 ## Synthesis and evaluation
 
