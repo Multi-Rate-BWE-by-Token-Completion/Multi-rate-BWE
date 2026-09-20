@@ -1,5 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this code, please cite the paper."
+doi: 10.5281/zenodo.22857710
+repository-code: "https://github.com/Multi-Rate-BWE-by-Token-Completion/Multi-rate-BWE"
+license: MIT
 title: "Multi-rate bandwidth extension by token completion in neural audio codecs"
 authors:
   - family-names: Ginies

@@ -1,5 +1,7 @@
 # Multi-rate bandwidth extension by token completion in neural audio codecs
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22857710.svg)](https://doi.org/10.5281/zenodo.22857710)
+
 Implementation of
 
 > Benoît Ginies, Olivier Fercoq, Gaël Richard.
@@ -290,7 +292,7 @@ full training checkpoints.
 
 ## Citation
 
-See [CITATION.cff](CITATION.cff).
+See [CITATION.cff](CITATION.cff). The code is archived on Zenodo: <https://doi.org/10.5281/zenodo.22857710> (this DOI always resolves to the latest archived version).
 
 ## License
 
