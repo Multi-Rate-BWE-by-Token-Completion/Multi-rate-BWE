@@ -69,7 +69,7 @@ SpS = argbind.bind(sps.model.SpS)
 # so this is the only thing supervising phase. Discriminator_DAC was tried here
 # instead and is kept in the codebase, but it is paired with DAC's *waveform*
 # decoder where phase coherence is structural; bolted onto a complex-STFT decoder
-# it does not play the same role. See runs/SpS-48_DAC_2 for that experiment.
+# it does not play the same role, which we measured and did not pursue.
 Discriminator = argbind.bind(sps.model.Discriminator)
 
 # Data

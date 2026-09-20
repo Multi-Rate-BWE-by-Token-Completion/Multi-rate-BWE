@@ -11,8 +11,9 @@ the codes and the embedding is unnecessary complexity; if explicit wins, the cod
 alone are ambiguous and that is a fact about the representation. Either outcome is
 reportable, and the pair is what makes it a controlled claim rather than a guess.
 
-The base TransformerModel is untouched -- train_bandext.py, the cascade and HPSS
-trainers all keep their behaviour.
+The base TransformerModel is untouched: a predictor trained without a rate
+embedding behaves exactly as before, and scripts/train_bwe.py picks the class
+from the `rate_emb` config switch.
 """
 import torch
 import torch.nn as nn

@@ -111,7 +111,11 @@ def to_audio(spec, reference):
 
 
 def main():
-    ap = argparse.ArgumentParser(add_help=False)
+    # add_help=False because argbind parses --help too (it lists everything the
+    # config exposes). Handle it here first, so that `--help` prints this
+    # script's own options instead of failing on the required --output.
+    ap = argparse.ArgumentParser(add_help=False, description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--input", default="samples/input_25s_16-48",
                     help="folder of sample_<i>_sr48000.wav references and their "
                          "sample_<i>_sr<cutoff>.wav band-limited partners")
@@ -135,6 +139,11 @@ def main():
                          "conditions, so they stay on a common scale. per_condition: a "
                          "condition is attenuated only if it clips on its own. Default "
                          "follows the paper: shared for spectrostream, per_condition for dac.")
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        ap.print_help()
+        print("\nEverything in the config can also be overridden, e.g. "
+              "--codec_ckpt PATH --n_decode 1,2,4")
+        raise SystemExit(0)
     known, rest = ap.parse_known_args()
     sys.argv = [sys.argv[0]] + rest
 
